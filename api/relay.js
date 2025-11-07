@@ -1,5 +1,4 @@
-// REMOVE THIS LINE:
-// export const config = { runtime: "edge", regions: ["sin1", "hkg1", "bom1"] };
+export const config = { runtime: "edge", regions: ["sin1", "hkg1", "bom1"] };
 
 import { Redis } from "@upstash/redis";
 const r = new Redis({
