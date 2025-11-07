@@ -1,5 +1,5 @@
 {
-  "name": "relay-protector",
+  "name": "relay-protector-noqueue",
   "type": "module",
   "dependencies": {
     "@upstash/redis": "^1.29.3"
