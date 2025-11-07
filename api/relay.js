@@ -1,4 +1,5 @@
-// SIMPLE VERSION - NO REDIS, JUST DISCORD
+import { Redis } from "@upstash/redis";
+
 const J = (o, s = 200) =>
   new Response(JSON.stringify(o), { 
     status: s, 
@@ -11,13 +12,11 @@ const J = (o, s = 200) =>
 export default async function handler(req) {
   console.log("Request method:", req.method);
   
-  // Health check - SIMPLE
+  // Health check
   if (req.method === "GET") {
-    console.log("Health check passed");
     return J({ status: "OK", message: "API is working" });
   }
 
-  // Only allow POST
   if (req.method !== "POST") {
     return J({ error: "Method not allowed" }, 405);
   }
@@ -33,60 +32,63 @@ export default async function handler(req) {
 
     console.log("Received body:", body);
 
-    // SIMPLE AUTH - No Redis, just check the key
+    // SIMPLE AUTH
     const authHeader = req.headers.get("authorization") || req.headers.get("x-api-key");
     if (!authHeader || !authHeader.includes("iloveyou123")) {
       return J({ error: "Unauthorized" }, 401);
     }
 
-    // Get Discord webhook from environment
+    // ✅ REDIS RATE LIMITING (Your protector needs this!)
+    const redis = new Redis({
+      url: process.env.UPSTASH_REDIS_REST_URL,
+      token: process.env.UPSTASH_REDIS_REST_TOKEN,
+    });
+
+    // Simple rate limiting
+    const userId = body.user_id || "unknown";
+    const minute = Math.floor(Date.now() / 60000);
+    const rateLimitKey = `rate:${userId}:${minute}`;
+    
+    const currentCount = await redis.incr(rateLimitKey);
+    if (currentCount === 1) {
+      await redis.expire(rateLimitKey, 60);
+    }
+
+    if (currentCount > 20) {
+      return J({ error: "Rate limit exceeded" }, 429);
+    }
+
+    // Get Discord webhook
     const webhookUrl = process.env.DISCORD_WEBHOOK_URL;
     if (!webhookUrl) {
-      console.log("No Discord webhook URL found");
       return J({ error: "Discord webhook not configured" }, 500);
     }
 
-    // Prepare Discord message
-    const content = `Test from API: ${body.content || "No content"}`;
-    
+    // Send to Discord
     const discordPayload = {
-      content: content.slice(0, 1900),
+      content: String(body.content || "No content").slice(0, 1900),
       username: "Relay Protector",
       allowed_mentions: { parse: [] }
     };
 
-    console.log("Sending to Discord:", webhookUrl);
-
-    // Send to Discord
     const discordResponse = await fetch(webhookUrl, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(discordPayload),
     });
 
     if (discordResponse.ok) {
-      console.log("✅ Successfully sent to Discord");
       return J({ 
         success: true, 
         message: "Sent to Discord",
-        discordStatus: discordResponse.status
+        rateLimit: currentCount
       });
     } else {
-      const errorText = await discordResponse.text();
-      console.log("❌ Discord error:", discordResponse.status, errorText);
-      return J({ 
-        error: "Discord rejected message",
-        discordStatus: discordResponse.status
-      }, 500);
+      return J({ error: "Discord rejected message" }, 500);
     }
 
   } catch (error) {
     console.log("❌ Server error:", error.message);
-    return J({ 
-      error: "Internal server error",
-      details: error.message 
-    }, 500);
+    return J({ error: "Internal server error" }, 500);
   }
 }
