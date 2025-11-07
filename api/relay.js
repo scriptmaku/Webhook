@@ -20,9 +20,9 @@ function fnv1a(str) {
 export default async function handler(req) {
   const url = new URL(req.url);
 
-  // Health check
-  if (req.method === "GET" && url.pathname.endsWith("/api/relay")) {
-    return new Response("OK", { status: 200 });
+  // Health check - FIXED
+  if (req.method === "GET") {
+    return J({ status: "OK", message: "API is running" });
   }
 
   if (req.method !== "POST") return new Response("Method Not Allowed", { status: 405 });
