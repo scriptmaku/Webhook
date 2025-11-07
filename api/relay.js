@@ -1,3 +1,5 @@
+export const config = { runtime: "edge", regions: ["sin1", "hkg1", "bom1"] };
+
 import { Redis } from "@upstash/redis";
 const r = new Redis({
   url: process.env.UPSTASH_REDIS_REST_URL,
@@ -20,9 +22,9 @@ function fnv1a(str) {
 export default async function handler(req) {
   const url = new URL(req.url);
 
-  // Health check - FIXED
-  if (req.method === "GET") {
-    return J({ status: "OK", message: "API is running" });
+  // Health check
+  if (req.method === "GET" && url.pathname.endsWith("/api/relay")) {
+    return new Response("OK", { status: 200 });
   }
 
   if (req.method !== "POST") return new Response("Method Not Allowed", { status: 405 });
